@@ -6,6 +6,7 @@ export async function uploadToVercelBlob(file: File, prefix: string = '') {
     const filename = `${prefix}${nanoid()}_${file.name}`;
     const { url } = await put(filename, file, {
       access: 'public',
+      token: "vercel_blob_rw_PTd2cskof6fsoEDH_fJieVearLfgx4xdNnfctsKiIWIHDEy"
     });
     return url;
   } catch (error) {
