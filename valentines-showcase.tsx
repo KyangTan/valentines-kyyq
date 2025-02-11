@@ -9,6 +9,9 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { FloatingHeart } from "./components/floating-heart"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { db } from "@/lib/firebase"
+import { doc, setDoc, getDoc } from "firebase/firestore"
+import { uploadToVercelBlob } from "@/lib/storage"
 
 interface HeartConfig {
   position: [number, number, number]
@@ -20,6 +23,17 @@ interface HeartConfig {
     rotationIntensity: number
     floatIntensity: number
   }
+}
+
+interface ImageData {
+  url: string
+  timestamp: number
+  prompt: string
+}
+
+interface ValentinesData {
+  images: { [key: number]: ImageData }
+  hearts: number
 }
 
 const IMAGE_PROMPTS = [
@@ -35,6 +49,7 @@ export default function ValentinesShowcase() {
   const [images, setImages] = useState<(string | null)[]>([null, null, null, null])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [heartConfigs, setHeartConfigs] = useState<HeartConfig[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
   // Generate random configurations once on mount
   useEffect(() => {
@@ -56,18 +71,69 @@ export default function ValentinesShowcase() {
     setHeartConfigs(configs)
   }, []) // Empty dependency array means this runs once on mount
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setImages(prev => {
-          const newImages = [...prev]
-          newImages[currentImageIndex] = reader.result as string
-          return newImages
-        })
+  // Load existing data
+  useEffect(() => {
+    const loadValentinesData = async () => {
+      try {
+        const docRef = doc(db, "valentines", "your_unique_id")
+        const docSnap = await getDoc(docRef)
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data() as ValentinesData
+          setHearts(data.hearts || 0)
+          
+          // Convert stored image data to array format
+          const loadedImages = [null, null, null, null]
+          Object.entries(data.images || {}).forEach(([index, imageData]) => {
+            loadedImages[parseInt(index)] = imageData.url
+          })
+          setImages(loadedImages)
+        }
+      } catch (error) {
+        console.error("Error loading data:", error)
       }
-      reader.readAsDataURL(file)
+    }
+
+    loadValentinesData()
+  }, [])
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setIsLoading(true)
+    try {
+      // Upload to Vercel Blob Storage
+      const downloadURL = await uploadToVercelBlob(
+        file, 
+        `valentines/your_unique_id/${currentImageIndex}_`
+      )
+
+      // Update state
+      setImages(prev => {
+        const newImages = [...prev]
+        newImages[currentImageIndex] = downloadURL
+        return newImages
+      })
+
+      // Save to Firestore (keeping metadata in Firestore)
+      const docRef = doc(db, "valentines", "your_unique_id")
+      await setDoc(docRef, {
+        images: {
+          [currentImageIndex]: {
+            url: downloadURL,
+            timestamp: Date.now(),
+            prompt: IMAGE_PROMPTS[currentImageIndex].label
+          }
+        },
+        hearts
+      }, { merge: true })
+
+    } catch (error) {
+      console.error("Error uploading image:", error)
+      // You might want to show an error message to the user
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -84,6 +150,24 @@ export default function ValentinesShowcase() {
       return `Replace ${IMAGE_PROMPTS[currentImageIndex].label} Photo`
     }
     return `Upload ${IMAGE_PROMPTS[currentImageIndex].label} Photo`
+  }
+
+  const handleHeartClick = async () => {
+    try {
+      const newHeartCount = hearts + 1
+      setHearts(newHeartCount)
+      setIsSparkling(true)
+      
+      console.log('newHeartCount', newHeartCount)
+
+      // Update hearts in Firestore
+      const docRef = doc(db, "valentines", "your_unique_id")
+      await setDoc(docRef, { hearts: newHeartCount }, { merge: true })
+      
+      setTimeout(() => setIsSparkling(false), 1000)
+    } catch (error) {
+      console.error("Error updating hearts:", error)
+    }
   }
 
   return (
@@ -199,8 +283,9 @@ export default function ValentinesShowcase() {
                   variant="outline"
                   className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
                   onClick={() => document.getElementById('picture')?.click()}
+                  disabled={isLoading}
                 >
-                  {getUploadButtonLabel()}
+                  {isLoading ? "Uploading..." : getUploadButtonLabel()}
                 </Button>
                 <Button
                   variant="outline"
@@ -232,11 +317,7 @@ export default function ValentinesShowcase() {
             <Button
               variant="outline"
               className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
-              onClick={() => {
-                setHearts((prev) => prev + 1)
-                setIsSparkling(true)
-                setTimeout(() => setIsSparkling(false), 1000)
-              }}
+              onClick={handleHeartClick}
             >
               Send Love
             </Button>

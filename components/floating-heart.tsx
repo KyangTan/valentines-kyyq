@@ -31,11 +31,11 @@ export function FloatingHeart({
     heartRef.current.rotation.z = Math.sin(time * 0.5) * 0.1;
 
     // Log base position
-    console.log('Heart base position:', {
-      x: position[0],
-      y: position[1],
-      z: position[2]
-    });
+  //   console.log('Heart base position:', {
+  //     x: position[0],
+  //     y: position[1],
+  //     z: position[2]
+  //   });
   });
  
   // x:1.657772506051911
