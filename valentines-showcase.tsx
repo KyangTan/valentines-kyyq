@@ -3,7 +3,7 @@
 import { useState, Suspense, useEffect } from "react"
 import { Canvas } from "@react-three/fiber"
 import { Environment, Float, OrbitControls } from "@react-three/drei"
-import { Heart, ChevronRight } from "lucide-react"
+import { Heart, ChevronRight, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { FloatingHeart } from "./components/floating-heart"
@@ -22,10 +22,17 @@ interface HeartConfig {
   }
 }
 
+const IMAGE_PROMPTS = [
+  { id: 0, label: "最喜欢的合照" },
+  { id: 1, label: "最难忘的回忆" },
+  { id: 2, label: "对方最好看的照片" },
+  { id: 3, label: "最喜欢的一趟旅行" }
+] as const
+
 export default function ValentinesShowcase() {
   const [hearts, setHearts] = useState(0)
   const [isSparkling, setIsSparkling] = useState(false)
-  const [images, setImages] = useState<string[]>([])
+  const [images, setImages] = useState<(string | null)[]>([null, null, null, null])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [heartConfigs, setHeartConfigs] = useState<HeartConfig[]>([])
 
@@ -50,20 +57,33 @@ export default function ValentinesShowcase() {
   }, []) // Empty dependency array means this runs once on mount
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (files) {
-      Array.from(files).forEach(file => {
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          setImages(prev => [...prev, reader.result as string])
-        }
-        reader.readAsDataURL(file)
-      })
+    const file = event.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImages(prev => {
+          const newImages = [...prev]
+          newImages[currentImageIndex] = reader.result as string
+          return newImages
+        })
+      }
+      reader.readAsDataURL(file)
     }
   }
 
   const handleNextImage = () => {
-    setCurrentImageIndex(prev => (prev + 1) % images.length)
+    setCurrentImageIndex(prev => (prev + 1) % 4)
+  }
+
+  const handlePreviousImage = () => {
+    setCurrentImageIndex(prev => (prev - 1 + 4) % 4)
+  }
+
+  const getUploadButtonLabel = () => {
+    if (images[currentImageIndex]) {
+      return `Replace ${IMAGE_PROMPTS[currentImageIndex].label} Photo`
+    }
+    return `Upload ${IMAGE_PROMPTS[currentImageIndex].label} Photo`
   }
 
   return (
@@ -125,20 +145,18 @@ export default function ValentinesShowcase() {
             </p>
 
             {/* Image preview */}
-            {images.length > 0 && (
+            {images.some(img => img !== null) && (
               <div className="mb-4">
                 <img
-                  src={images[currentImageIndex]}
-                  alt={`Image ${currentImageIndex + 1}`}
+                  src={images[currentImageIndex] || ''}
+                  alt={`${IMAGE_PROMPTS[currentImageIndex].label} photo`}
                   className="mx-auto max-h-40 rounded-lg object-cover"
                 />
-                {images.length > 1 && (
-                  <div className="mt-2 flex items-center justify-center gap-2">
-                    <span className="text-sm text-gray-500">
-                      {currentImageIndex + 1} / {images.length}
-                    </span>
-                  </div>
-                )}
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <span className="text-sm text-gray-500">
+                    {IMAGE_PROMPTS[currentImageIndex].label} ({currentImageIndex + 1}/4)
+                  </span>
+                </div>
               </div>
             )}
 
@@ -157,34 +175,56 @@ export default function ValentinesShowcase() {
             {/* Upload button */}
             <div className="w-full">
               <Label htmlFor="picture" className="mb-2 block text-center text-sm text-gray-600">
-                Add special photos
+                {images[currentImageIndex] 
+                  ? `Current: ${IMAGE_PROMPTS[currentImageIndex].label}`
+                  : `Upload your ${IMAGE_PROMPTS[currentImageIndex].label} photo`}
               </Label>
               <div className="flex justify-center gap-2">
                 <Input
                   id="picture"
                   type="file"
                   accept="image/*"
-                  multiple
                   className="hidden"
                   onChange={handleImageUpload}
                 />
                 <Button
                   variant="outline"
+                  size="icon"
+                  className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
+                  onClick={handlePreviousImage}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
                   className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
                   onClick={() => document.getElementById('picture')?.click()}
                 >
-                  Upload Images
+                  {getUploadButtonLabel()}
                 </Button>
-                {images.length > 1 && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
-                    onClick={handleNextImage}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
+                  onClick={handleNextImage}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              {/* Progress indicators */}
+              <div className="mt-2 flex justify-center gap-2">
+                {IMAGE_PROMPTS.map((prompt, index) => (
+                  <div
+                    key={prompt.id}
+                    className={`h-2 w-2 rounded-full transition-colors ${
+                      currentImageIndex === index
+                        ? 'bg-pink-500'
+                        : images[index]
+                        ? 'bg-pink-200'
+                        : 'bg-gray-200'
+                    }`}
+                  />
+                ))}
               </div>
             </div>
 
