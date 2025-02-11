@@ -43,6 +43,8 @@ const IMAGE_PROMPTS = [
   { id: 3, label: "最喜欢的一趟旅行" }
 ] as const
 
+type Gender = 'Kwan Yang' | 'Yong Qing' | null;
+
 export default function ValentinesShowcase() {
   const [hearts, setHearts] = useState(0)
   const [isSparkling, setIsSparkling] = useState(false)
@@ -50,6 +52,7 @@ export default function ValentinesShowcase() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [heartConfigs, setHeartConfigs] = useState<HeartConfig[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedGender, setSelectedGender] = useState<Gender>(null)
 
   // Generate random configurations once on mount
   useEffect(() => {
@@ -75,7 +78,7 @@ export default function ValentinesShowcase() {
   useEffect(() => {
     const loadValentinesData = async () => {
       try {
-        const docRef = doc(db, "valentines", "your_unique_id")
+        const docRef = doc(db, "valentines", selectedGender)
         const docSnap = await getDoc(docRef)
         
         if (docSnap.exists()) {
@@ -106,7 +109,7 @@ export default function ValentinesShowcase() {
       // Upload to Vercel Blob Storage
       const downloadURL = await uploadToVercelBlob(
         file, 
-        `valentines/your_unique_id/${currentImageIndex}_`
+        `valentines/${selectedGender}/${currentImageIndex}_`
       )
 
       // Update state
@@ -117,7 +120,7 @@ export default function ValentinesShowcase() {
       })
 
       // Save to Firestore (keeping metadata in Firestore)
-      const docRef = doc(db, "valentines", "your_unique_id")
+      const docRef = doc(db, "valentines", selectedGender)
       await setDoc(docRef, {
         images: {
           [currentImageIndex]: {
@@ -159,15 +162,86 @@ export default function ValentinesShowcase() {
       setIsSparkling(true)
       
       console.log('newHeartCount', newHeartCount)
-
       // Update hearts in Firestore
-      const docRef = doc(db, "valentines", "your_unique_id")
-      await setDoc(docRef, { hearts: newHeartCount }, { merge: true })
+      if (selectedGender) {
+        const docRef = doc(db, "valentines", selectedGender)
+        await setDoc(docRef, { hearts: newHeartCount }, { merge: true })
+      }else{
+        console.error("No gender selected")
+      }
       
       setTimeout(() => setIsSparkling(false), 1000)
     } catch (error) {
       console.error("Error updating hearts:", error)
     }
+  }
+
+  if (!selectedGender) {
+    return (
+      <div className="relative min-h-screen w-full">
+        {/* 3D Scene */}
+        <div className="absolute inset-0">
+          <Canvas camera={{ position: [0, 0, 20], fov: 45 }}>
+            <Suspense fallback={null}>
+              <Environment preset="sunset" />
+              <ambientLight intensity={0.5} />
+              <pointLight position={[10, 10, 10]} intensity={1} />
+
+              {/* Multiple floating hearts */}
+              {heartConfigs.map((config, i) => (
+                <Float
+                  key={i}
+                  speed={config.floatParams.speed}
+                  rotationIntensity={config.floatParams.rotationIntensity}
+                  floatIntensity={config.floatParams.floatIntensity}
+                >
+                  <FloatingHeart
+                    position={config.position}
+                    scale={config.scale}
+                    rotationSpeed={config.rotationSpeed}
+                    floatSpeed={config.floatSpeed}
+                  />
+                </Float>
+              ))}
+
+              <OrbitControls
+                enableZoom={false}
+                enablePan={false}
+                maxPolarAngle={Math.PI / 2}
+                minPolarAngle={Math.PI / 2}
+              />
+            </Suspense>
+          </Canvas>
+        </div>
+
+        {/* Gender Selection UI */}
+        <div className="relative z-10 flex min-h-screen items-center justify-center gap-4 p-4 md:p-8">
+          <Card 
+            className="w-48 cursor-pointer border-pink-200 bg-white/80 backdrop-blur-sm transition-all hover:scale-105"
+            onClick={() => setSelectedGender('Kwan Yang')}
+          >
+            <CardHeader>
+              <h2 className="text-center text-2xl font-bold text-blue-600">KY 大帅哥</h2>
+            </CardHeader>
+            <CardContent className="text-center">
+              <span className="text-6xl">👨</span>
+            </CardContent>
+          </Card>
+
+          <Card 
+            className="w-48 cursor-pointer border-pink-200 bg-white/80 backdrop-blur-sm transition-all hover:scale-105"
+            onClick={() => setSelectedGender('Yong Qing')}
+          >
+            <CardHeader>
+              <h2 className="text-center text-2xl font-bold text-pink-600">YQ 大美女</h2>
+            </CardHeader>
+            <CardContent className="text-center">
+              <span className="text-6xl">👩</span>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
