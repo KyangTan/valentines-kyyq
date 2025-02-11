@@ -95,11 +95,19 @@ export default function ValentinesShowcase() {
           }
           
           // Convert stored image data to array format
-          const loadedImages = [null, null, null, null]
-          Object.entries(dataSelected.images || {}).forEach(([index, imageData]) => {
-            loadedImages[parseInt(index)] = imageData.url
-          })
-          setImages(loadedImages)
+          // Reset images when changing gender
+          setImages([null, null, null, null])
+          
+          if (docSnapSelected.exists()) {
+            const data = docSnapSelected.data() as ValentinesData
+            const loadedImages = [null, null, null, null]
+            
+            // Load images from the selected gender's data
+            Object.entries(data.images || {}).forEach(([index, imageData]) => {
+              loadedImages[parseInt(index)] = imageData.url
+            })
+            setImages(loadedImages)
+          }
         }
 
         const docRefOther = doc(db, "valentines", selectedGender === "Kwan Yang" ? "Yong Qing" : "Kwan Yang")
@@ -149,7 +157,6 @@ export default function ValentinesShowcase() {
             prompt: IMAGE_PROMPTS[currentImageIndex].label
           }
         },
-        hearts
       }, { merge: true })
 
     } catch (error) {
@@ -342,7 +349,7 @@ export default function ValentinesShowcase() {
                 <img
                   src={images[currentImageIndex] || ''}
                   alt={`${IMAGE_PROMPTS[currentImageIndex].label} photo`}
-                  className="mx-auto max-h-40 rounded-lg object-cover"
+                  className="mx-auto max-h-5000 rounded-lg object-cover"
                 />
                 <div className="mt-2 flex items-center justify-center gap-2">
                   <span className="text-sm text-gray-500">
