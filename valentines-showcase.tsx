@@ -46,13 +46,16 @@ const IMAGE_PROMPTS = [
 type Gender = 'Kwan Yang' | 'Yong Qing' | null;
 
 export default function ValentinesShowcase() {
-  const [hearts, setHearts] = useState(0)
+  const [kyhearts, setKyHearts] = useState(0)
+  const [yqhearts, setYqHearts] = useState(0)
   const [isSparkling, setIsSparkling] = useState(false)
   const [images, setImages] = useState<(string | null)[]>([null, null, null, null])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [heartConfigs, setHeartConfigs] = useState<HeartConfig[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedGender, setSelectedGender] = useState<Gender>(null)
+  const [heartScale, setHeartScale] = useState(1)
+  const [lastClickTime, setLastClickTime] = useState(Date.now())
 
   // Generate random configurations once on mount
   useEffect(() => {
@@ -77,28 +80,46 @@ export default function ValentinesShowcase() {
   // Load existing data
   useEffect(() => {
     const loadValentinesData = async () => {
+      if (!selectedGender) return;
+      
       try {
-        const docRef = doc(db, "valentines", selectedGender)
-        const docSnap = await getDoc(docRef)
+        const docRefSelected = doc(db, "valentines", selectedGender)
+        const docSnapSelected = await getDoc(docRefSelected)
         
-        if (docSnap.exists()) {
-          const data = docSnap.data() as ValentinesData
-          setHearts(data.hearts || 0)
+        if (docSnapSelected.exists()) {
+          const dataSelected = docSnapSelected.data() as ValentinesData
+          if (selectedGender === "Kwan Yang") {
+            setKyHearts(dataSelected.hearts || 0)
+          } else {
+            setYqHearts(dataSelected.hearts || 0)
+          }
           
           // Convert stored image data to array format
           const loadedImages = [null, null, null, null]
-          Object.entries(data.images || {}).forEach(([index, imageData]) => {
+          Object.entries(dataSelected.images || {}).forEach(([index, imageData]) => {
             loadedImages[parseInt(index)] = imageData.url
           })
           setImages(loadedImages)
         }
+
+        const docRefOther = doc(db, "valentines", selectedGender === "Kwan Yang" ? "Yong Qing" : "Kwan Yang")
+        const docSnapOther = await getDoc(docRefOther)
+        if (docSnapOther.exists()) {
+          const dataOther = docSnapOther.data() as ValentinesData
+          if (selectedGender === "Kwan Yang") {
+            setYqHearts(dataOther.hearts || 0)
+          } else {
+            setKyHearts(dataOther.hearts || 0)
+          }
+        }
+
       } catch (error) {
         console.error("Error loading data:", error)
       }
     }
 
     loadValentinesData()
-  }, [])
+  }, [selectedGender])
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -118,9 +139,8 @@ export default function ValentinesShowcase() {
         newImages[currentImageIndex] = downloadURL
         return newImages
       })
-
       // Save to Firestore (keeping metadata in Firestore)
-      const docRef = doc(db, "valentines", selectedGender)
+      const docRef = doc(db, "valentines", selectedGender!)
       await setDoc(docRef, {
         images: {
           [currentImageIndex]: {
@@ -157,20 +177,34 @@ export default function ValentinesShowcase() {
 
   const handleHeartClick = async () => {
     try {
-      const newHeartCount = hearts + 1
-      setHearts(newHeartCount)
+      const now = Date.now()
+      const timeSinceLastClick = now - lastClickTime
+      
+      // Increase heart scale for rapid clicks (within 500ms)
+      if (timeSinceLastClick < 999999999) {
+        setHeartScale(prev => Math.min(prev + 0.5, 1000000)) // Cap at 2.5x
+      } else {
+        setHeartScale(1) // Reset to normal
+      }
+      setLastClickTime(now)
+
+      const newHeartCount = selectedGender === "Yong Qing" ? kyhearts + 1 : yqhearts + 1
+      if (selectedGender === "Yong Qing") {
+        setKyHearts(newHeartCount)
+      } else {
+        setYqHearts(newHeartCount)
+      }
       setIsSparkling(true)
       
-      console.log('newHeartCount', newHeartCount)
-      // Update hearts in Firestore
       if (selectedGender) {
-        const docRef = doc(db, "valentines", selectedGender)
+        const docRef = doc(db, "valentines", selectedGender === "Kwan Yang" ? "Yong Qing" : "Kwan Yang")
         await setDoc(docRef, { hearts: newHeartCount }, { merge: true })
-      }else{
-        console.error("No gender selected")
       }
       
-      setTimeout(() => setIsSparkling(false), 1000)
+      setTimeout(() => {
+        setIsSparkling(false)
+        setHeartScale(1) // Reset scale after animation
+      }, 500)
     } catch (error) {
       console.error("Error updating hearts:", error)
     }
@@ -320,13 +354,26 @@ export default function ValentinesShowcase() {
 
             {/* Heart counter */}
             <div className="flex items-center justify-center gap-2">
+              KY
               <Heart
-                className={`size-8 transition-all
-                  ${hearts > 0 ? "fill-red-500 text-red-500" : "text-gray-400"}
-                  ${hearts > 0 ? "scale-110" : "scale-100"}
+                className={`size-8 transition-all duration-300
+                  ${kyhearts > 0 ? "fill-blue-500 text-blue-500" : "text-gray-400"}
+                  ${kyhearts > 0 ? "scale-110" : "scale-100"}
                 `}
+                style={selectedGender === "Yong Qing" ? { transform: `scale(${heartScale})` } : undefined}
               />
-              <span className="text-2xl font-bold text-gray-700">{hearts}</span>
+              <span className="text-2xl font-bold text-gray-700">{kyhearts}</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              YQ
+              <Heart
+                className={`size-8 transition-all duration-300
+                  ${yqhearts > 0 ? "fill-purple-500 text-purple-500" : "text-gray-400"}
+                  ${yqhearts > 0 ? "scale-110" : "scale-100"}
+                `}
+                style={selectedGender === "Kwan Yang" ? { transform: `scale(${heartScale})` } : undefined}
+              />
+              <span className="text-2xl font-bold text-gray-700">{yqhearts}</span>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
