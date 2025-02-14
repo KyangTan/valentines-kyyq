@@ -61,6 +61,13 @@ export default function ValentinesShowcase() {
   const [lastClickTime, setLastClickTime] = useState(Date.now())
   const [showLoveModal, setShowLoveModal] = useState(false)
   const [bubbleSound] = useState(() => typeof Audio !== 'undefined' ? new Audio('/bubble.mp3') : null)
+  const [showFlowerModal, setShowFlowerModal] = useState(() => {
+    // Initialize from localStorage if available, otherwise false
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hasSeenFlowerModal') !== 'true'
+    }
+    return false
+  })
 
   // Generate random configurations once on mount
   useEffect(() => {
@@ -132,6 +139,15 @@ export default function ValentinesShowcase() {
       unsubscribeYQ();
     };
   }, [selectedGender]);
+
+  // Update the flower modal effect
+  useEffect(() => {
+    if (selectedGender === "Yong Qing" && showFlowerModal) {
+      setShowFlowerModal(true)
+      // Save to localStorage when shown
+      localStorage.setItem('hasSeenFlowerModal', 'true')
+    }
+  }, [selectedGender, showFlowerModal])
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -255,6 +271,26 @@ export default function ValentinesShowcase() {
             With all my love,<br />
             {selectedGender}
           </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+
+  // Add FlowerModal component before LoveLetterModal
+  const FlowerModal = () => (
+    <Dialog open={showFlowerModal} onOpenChange={setShowFlowerModal}>
+      <DialogContent className="max-w-sm bg-yellow-50/95 backdrop-blur-sm">
+        <DialogHeader>
+          <DialogTitle className="text-center text-2xl font-bold text-pink-600">
+            A Flower For You 🌹
+          </DialogTitle>
+        </DialogHeader>
+        <div className="p-4 text-center">
+          <img 
+            src="/flower.gif" 
+            alt="Blooming flower" 
+            className="mx-auto h-48 w-48 object-cover"
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -517,6 +553,7 @@ export default function ValentinesShowcase() {
         </Card>
       </div>
       <LoveLetterModal />
+      <FlowerModal />
       
       {/* Easter Egg Tooltip */}
       <div className="group fixed bottom-4 right-4 z-20">
