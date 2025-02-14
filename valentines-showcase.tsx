@@ -380,7 +380,7 @@ export default function ValentinesShowcase() {
           </p>
           <p className="text-right">
             With all my love,<br />
-            {selectedGender}
+            {"Kwan Yang"}
           </p>
         </div>
       </DialogContent>
