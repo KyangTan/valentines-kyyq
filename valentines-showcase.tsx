@@ -41,7 +41,9 @@ const IMAGE_PROMPTS = [
   { id: 0, label: "最喜欢的合照" },
   { id: 1, label: "对方最好看的照片" },
   { id: 2, label: "日常感照片" },
-  { id: 3, label: "最喜欢的一趟旅行" }
+  { id: 3, label: "对方最搞笑的照片" },
+  { id: 4, label: "对方最可爱的照片" },
+  { id: 5, label: "最喜欢的一趟旅行" }
 ] as const
 
 type Gender = 'Kwan Yang' | 'Yong Qing' | null;
@@ -50,7 +52,7 @@ export default function ValentinesShowcase() {
   const [kyhearts, setKyHearts] = useState(0)
   const [yqhearts, setYqHearts] = useState(0)
   const [isSparkling, setIsSparkling] = useState(false)
-  const [images, setImages] = useState<(string | null)[]>([null, null, null, null])
+  const [images, setImages] = useState<(string | null)[]>([null, null, null, null, null, null])
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [heartConfigs, setHeartConfigs] = useState<HeartConfig[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -105,11 +107,11 @@ export default function ValentinesShowcase() {
         const docSnapSelected = await getDoc(doc(db, "valentines", selectedGender));
         
         // Reset images when changing gender
-        setImages([null, null, null, null]);
+        setImages([null, null, null, null, null, null]);
         
         if (docSnapSelected.exists()) {
           const data = docSnapSelected.data() as ValentinesData;
-          const loadedImages = [null, null, null, null];
+          const loadedImages = [null, null, null, null, null, null];
           
           // Load images from the selected gender's data
           Object.entries(data.images || {}).forEach(([index, imageData]) => {
@@ -170,11 +172,11 @@ export default function ValentinesShowcase() {
   }
 
   const handleNextImage = () => {
-    setCurrentImageIndex(prev => (prev + 1) % 4)
+    setCurrentImageIndex(prev => (prev + 1) % 6)
   }
 
   const handlePreviousImage = () => {
-    setCurrentImageIndex(prev => (prev - 1 + 4) % 4)
+    setCurrentImageIndex(prev => (prev - 1 + 6) % 6)
   }
 
   const getUploadButtonLabel = () => {
@@ -404,7 +406,7 @@ export default function ValentinesShowcase() {
                 />
                 <div className="mt-2 flex items-center justify-center gap-2">
                   <span className="text-sm text-gray-500">
-                    {IMAGE_PROMPTS[currentImageIndex].label} ({currentImageIndex + 1}/4)
+                    {IMAGE_PROMPTS[currentImageIndex].label} ({currentImageIndex + 1}/6)
                   </span>
                 </div>
               </div>
