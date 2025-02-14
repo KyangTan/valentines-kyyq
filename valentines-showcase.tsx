@@ -35,6 +35,15 @@ interface ImageData {
 interface ValentinesData {
   images: { [key: number]: ImageData }
   hearts: number
+  competitionEndTime?: number
+}
+
+interface VictoryModalProps {
+  isOpen: boolean
+  onClose: () => void
+  isWinner: boolean
+  yourScore: number
+  theirScore: number
 }
 
 const IMAGE_PROMPTS = [
@@ -68,6 +77,9 @@ export default function ValentinesShowcase() {
     }
     return false
   })
+  const [competitionEndTime, setCompetitionEndTime] = useState<number | null>(null)
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null)
+  const [showVictoryModal, setShowVictoryModal] = useState(false)
 
   // Generate random configurations once on mount
   useEffect(() => {
@@ -98,6 +110,9 @@ export default function ValentinesShowcase() {
       if (doc.exists()) {
         const data = doc.data() as ValentinesData;
         setKyHearts(data.hearts || 0);
+        if (data.competitionEndTime) {
+          setCompetitionEndTime(data.competitionEndTime);
+        }
       }
     });
 
@@ -105,6 +120,9 @@ export default function ValentinesShowcase() {
       if (doc.exists()) {
         const data = doc.data() as ValentinesData;
         setYqHearts(data.hearts || 0);
+        if (data.competitionEndTime) {
+          setCompetitionEndTime(data.competitionEndTime);
+        }
       }
     });
 
@@ -148,6 +166,31 @@ export default function ValentinesShowcase() {
       localStorage.setItem('hasSeenFlowerModal', 'true')
     }
   }, [selectedGender, showFlowerModal])
+
+  // Modify the timer useEffect
+  useEffect(() => {
+    if (!competitionEndTime) return
+
+    const updateTimer = () => {
+      const now = Date.now()
+      const remaining = Math.max(0, competitionEndTime - now)
+      setTimeRemaining(remaining)
+
+      // When timer reaches 0, show victory modal and reset hearts
+      if (remaining === 0) {
+        const yourScore = selectedGender === "Kwan Yang" ? yqhearts : kyhearts
+        const theirScore = selectedGender === "Kwan Yang" ? kyhearts : yqhearts
+        setShowVictoryModal(true)
+        
+      }
+    }
+
+    // Update immediately and then every second
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+
+    return () => clearInterval(interval)
+  }, [competitionEndTime, selectedGender, kyhearts, yqhearts])
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -248,6 +291,74 @@ export default function ValentinesShowcase() {
     }
   }
 
+  // Modify the startCompetition function
+  const startCompetition = async () => {
+    try {
+      // First reset hearts to 0
+      await Promise.all([
+        setDoc(doc(db, "valentines", "Kwan Yang"), {
+          hearts: 0,
+          competitionEndTime: null
+        }, { merge: true }),
+        setDoc(doc(db, "valentines", "Yong Qing"), {
+          hearts: 0,
+          competitionEndTime: null
+        }, { merge: true })
+      ])
+
+      // Wait a brief moment to ensure hearts are reset
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // Then start the timer
+      const endTime = Date.now() + 15000 // 15 seconds from now
+      setCompetitionEndTime(endTime)
+
+      // Update both documents with the end time
+      await Promise.all([
+        setDoc(doc(db, "valentines", "Kwan Yang"), {
+          competitionEndTime: endTime
+        }, { merge: true }),
+        setDoc(doc(db, "valentines", "Yong Qing"), {
+          competitionEndTime: endTime
+        }, { merge: true })
+      ])
+    } catch (error) {
+      console.error("Error starting competition:", error)
+    }
+  }
+
+  // Add this new function
+  const resetHearts = async () => {
+    try {
+      await Promise.all([
+        setDoc(doc(db, "valentines", "Kwan Yang"), {
+          hearts: 0,
+          competitionEndTime: null
+        }, { merge: true }),
+        setDoc(doc(db, "valentines", "Yong Qing"), {
+          hearts: 0,
+          competitionEndTime: null
+        }, { merge: true })
+      ])
+      setCompetitionEndTime(null)
+      setTimeRemaining(null)
+    } catch (error) {
+      console.error("Error resetting hearts:", error)
+    }
+  }
+
+  // Add this helper function
+  const formatTime = (ms: number) => {
+    const seconds = Math.floor(ms / 1000)
+    return `${seconds}s`
+  }
+
+  // Add this new function
+  const closeVictoryModal = async () => {
+    await resetHearts()
+    setShowVictoryModal(false)
+  }
+
   // Add the love letter modal JSX before the final return statement
   const LoveLetterModal = () => (
     <Dialog open={showLoveModal} onOpenChange={setShowLoveModal}>
@@ -259,7 +370,7 @@ export default function ValentinesShowcase() {
         </DialogHeader>
         <div className="p-6 text-gray-700">
           <p className="mb-4 text-center italic">
-            "Dearest {selectedGender === "Kwan Yang" ? "Yong Qing" : "Kwan Yang"},
+            "Dearest {"Yong Qing"},
           </p>
           <p className="mb-4 leading-relaxed text-center">
             I always feel that with you by my side, even the most ordinary days become meaningful. Whether it's having meals together, taking a walk, or casually chatting about little things, it all feels so comforting.
@@ -291,6 +402,33 @@ export default function ValentinesShowcase() {
             alt="Blooming flower" 
             className="mx-auto h-48 w-48 object-cover"
           />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+
+  // Add VictoryModal component before LoveLetterModal
+  const VictoryModal: React.FC<VictoryModalProps> = ({ isOpen, onClose, isWinner, yourScore, theirScore }) => (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm bg-white/95 backdrop-blur-sm">
+        <DialogHeader>
+          <DialogTitle className="text-center text-2xl font-bold text-pink-600">
+            Competition Results 🏆
+          </DialogTitle>
+        </DialogHeader>
+        <div className="p-6 text-center">
+          <div className="mb-4">
+            <p className="text-xl font-bold">
+              {isWinner ? "Congratulations! 🎉" : "Nice try! 💝"}
+            </p>
+            <p className="text-lg text-gray-700">
+              {isWinner ? "Your love shines the brightest!" : "Keep spreading the love!"}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-gray-600">Your score: {yourScore} ❤️</p>
+            <p className="text-gray-600">Their score: {theirScore} ❤️</p>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -471,6 +609,31 @@ export default function ValentinesShowcase() {
               />
               <span className="text-2xl font-bold text-gray-700">{yqhearts}</span>
             </div>
+
+            {/* Competition UI */}
+            <div className="mt-4 flex flex-col items-center gap-2">
+              {timeRemaining !== null ? (
+                <div className="text-center">
+                  <p className="text-lg font-bold text-pink-600">
+                    Love Competition! 💕
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {formatTime(timeRemaining)}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Click fast to show your love!
+                  </p>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
+                  onClick={startCompetition}
+                >
+                  Start Send Love Competition 🏆
+                </Button>
+              )}
+            </div>
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             {/* Upload button */}
@@ -539,8 +702,7 @@ export default function ValentinesShowcase() {
               Send Love
             </Button>
              {/* Show Love Letter button when hearts >= 50 */}
-             {((selectedGender === "Yong Qing" && kyhearts >= 50) || 
-              (selectedGender === "Kwan Yang" && yqhearts >= 50)) && (
+             {((selectedGender === "Yong Qing" && kyhearts >= 50)) && (
               <Button
                 variant="outline"
                 className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
@@ -554,6 +716,13 @@ export default function ValentinesShowcase() {
       </div>
       <LoveLetterModal />
       <FlowerModal />
+      <VictoryModal 
+        isOpen={showVictoryModal}
+        onClose={closeVictoryModal}
+        isWinner={selectedGender === "Kwan Yang" ? yqhearts > kyhearts : kyhearts > yqhearts}
+        yourScore={selectedGender === "Kwan Yang" ? yqhearts : kyhearts}
+        theirScore={selectedGender === "Kwan Yang" ? kyhearts : yqhearts}
+      />
       
       {/* Easter Egg Tooltip */}
       <div className="group fixed bottom-4 right-4 z-20">
