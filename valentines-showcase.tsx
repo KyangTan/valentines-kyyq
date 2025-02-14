@@ -58,6 +58,7 @@ export default function ValentinesShowcase() {
   const [heartScale, setHeartScale] = useState(1)
   const [lastClickTime, setLastClickTime] = useState(Date.now())
   const [showLoveModal, setShowLoveModal] = useState(false)
+  const [bubbleSound] = useState(() => typeof Audio !== 'undefined' ? new Audio('/bubble.mp3') : null)
 
   // Generate random configurations once on mount
   useEffect(() => {
@@ -185,6 +186,12 @@ export default function ValentinesShowcase() {
 
   const handleHeartClick = async () => {
     try {
+      // Reset and play bubble sound
+      if (bubbleSound) {
+        bubbleSound.currentTime = 0  // Reset to start
+        bubbleSound.play().catch(console.error)
+      }
+      
       const now = Date.now()
       const timeSinceLastClick = now - lastClickTime
       
