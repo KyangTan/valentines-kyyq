@@ -10,8 +10,9 @@ import { FloatingHeart } from "./components/floating-heart"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { db } from "@/lib/firebase"
-import { doc, setDoc, getDoc } from "firebase/firestore"
+import { doc, setDoc, getDoc, onSnapshot } from "firebase/firestore"
 import { uploadToVercelBlob } from "@/lib/storage"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 interface HeartConfig {
   position: [number, number, number]
@@ -38,8 +39,8 @@ interface ValentinesData {
 
 const IMAGE_PROMPTS = [
   { id: 0, label: "最喜欢的合照" },
-  { id: 1, label: "最难忘的回忆" },
-  { id: 2, label: "对方最好看的照片" },
+  { id: 1, label: "对方最好看的照片" },
+  { id: 2, label: "日常感照片" },
   { id: 3, label: "最喜欢的一趟旅行" }
 ] as const
 
@@ -56,6 +57,7 @@ export default function ValentinesShowcase() {
   const [selectedGender, setSelectedGender] = useState<Gender>(null)
   const [heartScale, setHeartScale] = useState(1)
   const [lastClickTime, setLastClickTime] = useState(Date.now())
+  const [showLoveModal, setShowLoveModal] = useState(false)
 
   // Generate random configurations once on mount
   useEffect(() => {
@@ -77,57 +79,56 @@ export default function ValentinesShowcase() {
     setHeartConfigs(configs)
   }, []) // Empty dependency array means this runs once on mount
 
-  // Load existing data
+  // Replace the loading useEffect with this one
   useEffect(() => {
-    const loadValentinesData = async () => {
-      if (!selectedGender) return;
-      
+    if (!selectedGender) return;
+    
+    // Set up realtime listeners
+    const unsubscribeKY = onSnapshot(doc(db, "valentines", "Kwan Yang"), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data() as ValentinesData;
+        setKyHearts(data.hearts || 0);
+      }
+    });
+
+    const unsubscribeYQ = onSnapshot(doc(db, "valentines", "Yong Qing"), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data() as ValentinesData;
+        setYqHearts(data.hearts || 0);
+      }
+    });
+
+    // Load images
+    const loadImages = async () => {
       try {
-        const docRefSelected = doc(db, "valentines", selectedGender)
-        const docSnapSelected = await getDoc(docRefSelected)
+        const docSnapSelected = await getDoc(doc(db, "valentines", selectedGender));
+        
+        // Reset images when changing gender
+        setImages([null, null, null, null]);
         
         if (docSnapSelected.exists()) {
-          const dataSelected = docSnapSelected.data() as ValentinesData
-          if (selectedGender === "Kwan Yang") {
-            setKyHearts(dataSelected.hearts || 0)
-          } else {
-            setYqHearts(dataSelected.hearts || 0)
-          }
+          const data = docSnapSelected.data() as ValentinesData;
+          const loadedImages = [null, null, null, null];
           
-          // Convert stored image data to array format
-          // Reset images when changing gender
-          setImages([null, null, null, null])
-          
-          if (docSnapSelected.exists()) {
-            const data = docSnapSelected.data() as ValentinesData
-            const loadedImages = [null, null, null, null]
-            
-            // Load images from the selected gender's data
-            Object.entries(data.images || {}).forEach(([index, imageData]) => {
-              loadedImages[parseInt(index)] = imageData.url
-            })
-            setImages(loadedImages)
-          }
+          // Load images from the selected gender's data
+          Object.entries(data.images || {}).forEach(([index, imageData]) => {
+            loadedImages[parseInt(index)] = imageData.url;
+          });
+          setImages(loadedImages);
         }
-
-        const docRefOther = doc(db, "valentines", selectedGender === "Kwan Yang" ? "Yong Qing" : "Kwan Yang")
-        const docSnapOther = await getDoc(docRefOther)
-        if (docSnapOther.exists()) {
-          const dataOther = docSnapOther.data() as ValentinesData
-          if (selectedGender === "Kwan Yang") {
-            setYqHearts(dataOther.hearts || 0)
-          } else {
-            setKyHearts(dataOther.hearts || 0)
-          }
-        }
-
       } catch (error) {
-        console.error("Error loading data:", error)
+        console.error("Error loading images:", error);
       }
-    }
+    };
 
-    loadValentinesData()
-  }, [selectedGender])
+    loadImages();
+
+    // Cleanup listeners on unmount or when selectedGender changes
+    return () => {
+      unsubscribeKY();
+      unsubscribeYQ();
+    };
+  }, [selectedGender]);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -203,6 +204,11 @@ export default function ValentinesShowcase() {
       }
       setIsSparkling(true)
       
+      // Check if hearts reached 50
+      if (newHeartCount === 50) {
+        setShowLoveModal(true)
+      }
+      
       if (selectedGender) {
         const docRef = doc(db, "valentines", selectedGender === "Kwan Yang" ? "Yong Qing" : "Kwan Yang")
         await setDoc(docRef, { hearts: newHeartCount }, { merge: true })
@@ -216,6 +222,34 @@ export default function ValentinesShowcase() {
       console.error("Error updating hearts:", error)
     }
   }
+
+  // Add the love letter modal JSX before the final return statement
+  const LoveLetterModal = () => (
+    <Dialog open={showLoveModal} onOpenChange={setShowLoveModal}>
+      <DialogContent className="max-w-md bg-white/95 backdrop-blur-sm">
+        <DialogHeader>
+          <DialogTitle className="text-center text-2xl font-bold text-pink-600">
+            A Love Letter For You 💝
+          </DialogTitle>
+        </DialogHeader>
+        <div className="p-6 text-gray-700">
+          <p className="mb-4 text-center italic">
+            "Dearest {selectedGender === "Kwan Yang" ? "Yong Qing" : "Kwan Yang"},
+          </p>
+          <p className="mb-4 leading-relaxed text-center">
+            I always feel that with you by my side, even the most ordinary days become meaningful. Whether it's having meals together, taking a walk, or casually chatting about little things, it all feels so comforting.
+          </p>
+          <p className="mb-4 leading-relaxed text-center">
+            I'm truly grateful for your understanding and companionship, guiding each other to love more. Every day with you feels like a blessing. I hope we can continue like this—simple and happy—walking forward together. Thank you for being my perfect Valentine, today and always.
+          </p>
+          <p className="text-right">
+            With all my love,<br />
+            {selectedGender}
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 
   if (!selectedGender) {
     return (
@@ -280,6 +314,16 @@ export default function ValentinesShowcase() {
               <span className="text-6xl">👩</span>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Easter Egg Tooltip */}
+        <div className="group fixed bottom-4 right-4 z-20">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-gray-600 backdrop-blur-sm">
+            ?
+          </div>
+          <div className="absolute bottom-full right-0 mb-2 hidden rounded-lg bg-white/80 p-2 text-sm text-gray-600 backdrop-blur-sm group-hover:block">
+            💝 Psst... there&apos;s an easter egg to discover!
+          </div>
         </div>
       </div>
     )
@@ -449,8 +493,30 @@ export default function ValentinesShowcase() {
             >
               Send Love
             </Button>
+             {/* Show Love Letter button when hearts >= 50 */}
+             {((selectedGender === "Yong Qing" && kyhearts >= 50) || 
+              (selectedGender === "Kwan Yang" && yqhearts >= 50)) && (
+              <Button
+                variant="outline"
+                className="border-pink-200 bg-white/50 transition-colors hover:bg-pink-50"
+                onClick={() => setShowLoveModal(true)}
+              >
+                Read Love Letter 💝
+              </Button>
+            )}
           </CardFooter>
         </Card>
+      </div>
+      <LoveLetterModal />
+      
+      {/* Easter Egg Tooltip */}
+      <div className="group fixed bottom-4 right-4 z-20">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-gray-600 backdrop-blur-sm">
+          ?
+        </div>
+        <div className="absolute bottom-full right-0 mb-2 hidden rounded-lg bg-white/80 p-2 text-sm text-gray-600 backdrop-blur-sm group-hover:block">
+          💝 Psst... there&apos;s an easter egg to discover!
+        </div>
       </div>
     </div>
   )
